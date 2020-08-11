@@ -1,10 +1,22 @@
 import { SignUpController } from './signup'
 import { MissingParamError, InvalidParamError, ServerError } from '../errors/index'
 import { EmailValidator } from '../protocols/email-validator'
+import { AccountModel } from '../../domain/models/account'
+import { AddAccount, AddAccountModel } from '../../domain/usecases/add-account'
 
-interface SutTypes {
-  sut: SignUpController
-  emailValidatorStup: EmailValidator
+const makeAddAccount = (): AddAccount => {
+  class AddAccountStup implements AddAccount {
+    add (account: AddAccountModel): AccountModel {
+      const fakeAccount = {
+        id: 'valid_id',
+        name: 'valid_name',
+        email: 'valid_email@mail.com',
+        password: 'valid_password'
+      }
+      return fakeAccount
+    }
+  }
+  return new AddAccountStup()
 }
 
 const makeEmailValidator = (): EmailValidator => {
@@ -16,12 +28,20 @@ const makeEmailValidator = (): EmailValidator => {
   return new EmailValidatorStup()
 }
 
+interface SutTypes {
+  sut: SignUpController
+  emailValidatorStup: EmailValidator
+  addAccountStup: AddAccount
+}
+
 const makeSut = (): SutTypes => {
   const emailValidatorStup = makeEmailValidator()
-  const sut = new SignUpController(emailValidatorStup)
+  const addAccountStup = makeAddAccount()
+  const sut = new SignUpController(emailValidatorStup, addAccountStup)
   return {
     sut,
-    emailValidatorStup
+    emailValidatorStup,
+    addAccountStup
   }
 }
 
@@ -150,5 +170,24 @@ describe('SignUp Controller', () => {
     const httpResponse = sut.handle(httpResquest)
     expect(httpResponse.statusCode).toBe(500)
     expect(httpResponse.body).toEqual(new ServerError())
+  })
+
+  test('Should call addAccount with correct values', () => {
+    const { sut, addAccountStup } = makeSut()
+    const addSpy = jest.spyOn(addAccountStup, 'add')
+    const httpResquest = {
+      body: {
+        name: 'any_name',
+        email: 'any_email@mail.com',
+        password: 'any_password',
+        passwordConfirmation: 'any_password'
+      }
+    }
+    sut.handle(httpResquest)
+    expect(addSpy).toHaveBeenCalledWith({
+      email: 'any_email@mail.com',
+      name: 'any_name',
+      password: 'any_password'
+    })
   })
 })
